@@ -1,103 +1,252 @@
-import Image from "next/image";
+// src/app/page.tsx
+// Main Gigr dashboard interface
 
-export default function Home() {
+'use client';
+
+import { useState, useEffect } from 'react';
+import { ProspectCard } from '@/components/dashboard/ProspectCard';
+import { AnalyticsDashboard } from '@/components/dashboard/AnalyticsDashboard';
+import { ProspectDiscovery } from '@/components/dashboard/ProspectDiscovery';
+
+interface Prospect {
+  id: string;
+  company: string;
+  industry: string;
+  size: string;
+  description: string;
+  painPoints?: string[];
+  score?: {
+    urgency: number;
+    budget: number;
+    fitScore: number;
+    contactability: number;
+    overallScore: number;
+    reasoning: string;
+  };
+  outreachMessage?: string;
+  status: string;
+  createdAt: string;
+}
+
+interface Analytics {
+  overview: {
+    totalProspects: number;
+    highScoreProspects: number;
+    contacted: number;
+    responded: number;
+    qualified: number;
+    responseRate: number;
+    qualificationRate: number;
+  };
+  scoreDistribution: Record<string, number>;
+  industryBreakdown: Record<string, number>;
+  recentProspects: Prospect[];
+}
+
+export default function GigrDashboard() {
+  const [prospects, setProspects] = useState<Prospect[]>([]);
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [activeTab, setActiveTab] = useState<'prospects' | 'analytics' | 'discovery'>('prospects');
+  const [loading, setLoading] = useState(true);
+  const [minScore, setMinScore] = useState(70);
+
+  useEffect(() => {
+    loadProspects();
+    loadAnalytics();
+  }, [minScore]);
+
+  const loadProspects = async () => {
+    try {
+      const response = await fetch(`/api/prospects/list?minScore=${minScore}`);
+      const data = await response.json();
+      setProspects(data.prospects || []);
+    } catch (error) {
+      console.error('Error loading prospects:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadAnalytics = async () => {
+    try {
+      const response = await fetch('/api/analytics/dashboard');
+      const data = await response.json();
+      setAnalytics(data);
+    } catch (error) {
+      console.error('Error loading analytics:', error);
+    }
+  };
+
+  const updateProspectStatus = async (id: string, status: string) => {
+    try {
+      await fetch(`/api/prospects/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      
+      // Update local state
+      setProspects(prospects.map(p => 
+        p.id === id ? { ...p, status } : p
+      ));
+      
+      // Reload analytics
+      loadAnalytics();
+    } catch (error) {
+      console.error('Error updating prospect status:', error);
+    }
+  };
+
+  const generateOutreach = async (prospectId: string) => {
+    try {
+      const response = await fetch('/api/outreach/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prospectId })
+      });
+      
+      const data = await response.json();
+      
+      // Update prospect with new outreach message
+      setProspects(prospects.map(p => 
+        p.id === prospectId ? { ...p, outreachMessage: data.outreachMessage } : p
+      ));
+    } catch (error) {
+      console.error('Error generating outreach:', error);
+    }
+  };
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-2xl font-bold text-gray-900">Gigr</h1>
+              <span className="text-sm text-gray-500">AI Gig Generation Agent</span>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              {analytics && (
+                <div className="hidden md:flex items-center space-x-6 text-sm">
+                  <div className="text-center">
+                    <div className="font-semibold text-gray-900">{analytics.overview.totalProspects}</div>
+                    <div className="text-gray-500">Total Prospects</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-semibold text-green-600">{analytics.overview.highScoreProspects}</div>
+                    <div className="text-gray-500">High Score</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-semibold text-blue-600">{analytics.overview.responseRate}%</div>
+                    <div className="text-gray-500">Response Rate</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
+      </header>
+
+      {/* Navigation Tabs */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            {[
+              { id: 'prospects', label: 'Prospects', count: prospects.length },
+              { id: 'analytics', label: 'Analytics', count: null },
+              { id: 'discovery', label: 'Discovery', count: null }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === tab.id
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {tab.label}
+                {tab.count !== null && (
+                  <span className="ml-2 bg-gray-100 text-gray-900 py-0.5 px-2 rounded-full text-xs">
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {activeTab === 'prospects' && (
+          <div>
+            {/* Filters */}
+            <div className="mb-6 flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <label className="text-sm font-medium text-gray-700">
+                  Minimum Score:
+                </label>
+                <select
+                  value={minScore}
+                  onChange={(e) => setMinScore(parseInt(e.target.value))}
+                  className="border border-gray-300 rounded-md px-3 py-1 text-sm"
+                >
+                  <option value={0}>All Prospects</option>
+                  <option value={60}>60+ (Good)</option>
+                  <option value={70}>70+ (High Priority)</option>
+                  <option value={80}>80+ (Excellent)</option>
+                </select>
+              </div>
+              
+              <button
+                onClick={loadProspects}
+                className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
+              >
+                Refresh
+              </button>
+            </div>
+
+            {/* Prospects Grid */}
+            {loading ? (
+              <div className="text-center py-12">
+                <div className="text-gray-500">Loading prospects...</div>
+              </div>
+            ) : prospects.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-gray-500 mb-4">No prospects found</div>
+                <button
+                  onClick={() => setActiveTab('discovery')}
+                  className="bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-green-700"
+                >
+                  Discover New Prospects
+                </button>
+              </div>
+            ) : (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {prospects.map((prospect) => (
+                  <ProspectCard
+                    key={prospect.id}
+                    prospect={prospect}
+                    onStatusUpdate={updateProspectStatus}
+                    onGenerateOutreach={generateOutreach}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'analytics' && analytics && (
+          <AnalyticsDashboard analytics={analytics} />
+        )}
+
+        {activeTab === 'discovery' && (
+          <ProspectDiscovery onProspectsDiscovered={loadProspects} />
+        )}
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
   );
 }
